@@ -1,0 +1,134 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1, user-scalable=no" />
+  <title>WebAR marcador (MindAR + A‑Frame)</title>
+
+  <!-- A‑Frame -->
+  <script src="https://cdn.jsdelivr.net/npm/aframe@1.5.0/dist/aframe.min.js"></script>
+  <!-- MindAR para A‑Frame -->
+  <script src="https://cdn.jsdelivr.net/npm/mind-ar@1.2.5/dist/mindar-image-aframe.prod.js"></script>
+
+  <style>
+    body { margin: 0; overflow: hidden; background: #000; }
+    .loading { position: fixed; inset: 0; display: grid; place-items: center; color: #fff; font-family: system-ui, sans-serif; }
+    .hint { position: fixed; bottom: 10px; left: 50%; transform: translateX(-50%); color: #fff; background: rgba(0,0,0,.5); padding: 6px 10px; border-radius: 8px; font-size: 14px; }
+  </style>
+</head>
+<body>
+  <div id="loading" class="loading">Cargando AR… permite el acceso a la cámara</div>
+  <div class="hint">Apunta al plano impreso. Si no carga, asegúrate de haber agregado <b>targets.mind</b> al proyecto.</div>
+
+  <a-scene
+    mindar-image="imageTargetSrc: ./targets.mind; filterMinCF:0.0001; filterBeta:0.01; maxTrack: 1;"
+    vr-mode-ui="enabled: false"
+    device-orientation-permission-ui="enabled: true"
+    renderer="colorManagement: true; physicallyCorrectLights: true; logarithmicDepthBuffer: true;"
+    embedded
+  >
+    <a-assets>
+      <img id="img1tex" src="./img1.png"/>
+      <img id="img2tex" src="./img2.png"/>
+    </a-assets>
+
+    <!-- Cámara -->
+    <a-camera position="0 0 0" look-controls="enabled: false"></a-camera>
+
+    <!-- Target 0: tu plano como marcador -->
+    <a-entity id="target" mindar-image-target="targetIndex: 0">
+
+      <!-- Config estimada del tamaño del target (para ubicar la fila superior) -->
+      <a-entity id="config" data-target-height="0.70"></a-entity>
+
+      <!-- Anclajes aproximados (x, z) sobre el plano  -->
+      <!-- Horno (dibujo pequeño) - aprox. lado derecho -->
+      <a-entity id="ovenAnchor" position="0.22 0.001 0.06"></a-entity>
+      <!-- Refrigerador (dibujo grande) - aprox. lado izquierdo -->
+      <a-entity id="fridgeAnchor" position="-0.28 0.001 0.08"></a-entity>
+      <!-- Fila superior final donde quedarán ambas imágenes -->
+      <a-entity id="topRow" position="0 0 -0.28"></a-entity>
+
+      <!-- ===== Imagen 1 (HORNO) ===== -->
+      <a-image id="img1" src="#img1tex" width="0.42" height="0.24" position="0 0 0" rotation="-90 0 0" visible="false"></a-image>
+
+      <!-- ===== Imagen 2 (REFRIGERADOR) ===== -->
+      <a-image id="img2" src="#img2tex" width="0.42" height="0.24" position="0 0 0" rotation="-90 0 0" visible="false"></a-image>
+
+      <script>
+        function setPosFromAnchor(el, anchorEl, y=0.001) {
+          const p = anchorEl.object3D.position;
+          el.setAttribute('position', {x: p.x, y: y, z: p.z});
+        }
+
+        const loading = document.getElementById('loading');
+        const img1 = document.getElementById('img1');
+        const img2 = document.getElementById('img2');
+        const ovenAnchor = document.getElementById('ovenAnchor');
+        const fridgeAnchor = document.getElementById('fridgeAnchor');
+        const topRow = document.getElementById('topRow');
+        const config = document.getElementById('config');
+
+        function adjustTopRow() {
+          const h = parseFloat(config.dataset.targetHeight || '0.70');
+          const margin = 0.05;
+          topRow.object3D.position.set(0, 0, -h/2 + margin);
+        }
+        adjustTopRow();
+
+        document.addEventListener('targetFound', () => {
+          if (loading) loading.style.display = 'none';
+
+          // Mostrar y preparar estados iniciales
+          img1.setAttribute('visible', 'true');
+          img2.setAttribute('visible', 'true');
+
+          setPosFromAnchor(img1, ovenAnchor, 0.001);
+          setPosFromAnchor(img2, fridgeAnchor, 0.001);
+          img1.setAttribute('scale', '0.01 0.01 0.01');
+          img2.setAttribute('scale', '0.01 0.01 0.01');
+
+          // Animación 1: imagen del horno sale primero
+          const p1 = ovenAnchor.object3D.position;
+          img1.setAttribute('animation__rise1', {
+            property: 'position', to: `${p1.x} 0.20 ${p1.z}`, dur: 900, easing: 'easeOutCubic'
+          });
+          img1.setAttribute('animation__scale1', {
+            property: 'scale', to: '1 1 1', dur: 900, easing: 'easeOutBack'
+          });
+
+          // Animación 2: refrigerador sale después
+          setTimeout(() => {
+            const p2 = fridgeAnchor.object3D.position;
+            img2.setAttribute('animation__rise2', {
+              property: 'position', to: `${p2.x} 0.20 ${p2.z}`, dur: 900, easing: 'easeOutCubic'
+            });
+            img2.setAttribute('animation__scale2', {
+              property: 'scale', to: '1 1 1', dur: 900, easing: 'easeOutBack'
+            });
+          }, 950);
+
+          // Luego mover ambas a la fila superior (quedan arriba del plano)
+          setTimeout(() => {
+            const top = topRow.object3D.position;
+            const final1 = {x: top.x - 0.22, y: 0.22, z: top.z};
+            const final2 = {x: top.x + 0.22, y: 0.22, z: top.z};
+            img1.setAttribute('animation__toTop1', {
+              property: 'position', to: `${final1.x} ${final1.y} ${final1.z}`, dur: 700, easing: 'easeInOutSine'
+            });
+            img2.setAttribute('animation__toTop2', {
+              property: 'position', to: `${final2.x} ${final2.y} ${final2.z}`, dur: 700, easing: 'easeInOutSine'
+            });
+          }, 2100);
+        });
+
+        document.addEventListener('targetLost', () => {
+          img1.setAttribute('visible', 'false');
+          img2.setAttribute('visible', 'false');
+        });
+      </script>
+
+    </a-entity>
+  </a-scene>
+</body>
+</html>

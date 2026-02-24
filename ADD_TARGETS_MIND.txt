@@ -1,0 +1,1 @@
+Coloca aqui el archivo targets.mind generado con el compilador de MindAR: https://hiukim.github.io/mind-ar-js-doc/tools/compile/
